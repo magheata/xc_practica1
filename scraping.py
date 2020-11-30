@@ -1,13 +1,18 @@
+import sys
+
 from bs4 import BeautifulSoup
 import requests
 import multiprocessing
 
-paper_link = 'https://www.medicinenet.com'
-
 diseasesWithSymptoms = {}
 results = []
+paper_link = 'https://www.medicinenet.com'
 
+sys.setrecursionlimit(10000)
 
+'''
+Método que devuelve una lista con las enfermedades de un síntoma.
+'''
 def getDiseases(diseases_for_symptoms):
     diseases = []
     for disease_for_symptom in diseases_for_symptoms:
@@ -20,7 +25,9 @@ def getDiseases(diseases_for_symptoms):
             diseases.append(disease_text)
     return diseases
 
-
+'''
+Método que devuelve el HTML con las enfermedades asociadas a un sintoma.
+'''
 def getDiseasesForSymptom(symptom_soup):
     diseases_for_symptom = []
     diseases = symptom_soup.find('div', class_="indexDCList")
@@ -30,7 +37,9 @@ def getDiseasesForSymptom(symptom_soup):
         diseases_for_symptom = diseases.find_all('h2', itemprop="alternativeHeadline")
     return diseases_for_symptom
 
-
+'''
+Método que se encarga de recoger las enfermedades de cada síntoma. 
+'''
 def getDiseasesForSymptomsLink(symptoms, diseases_with_symptoms):
     for symptom in symptoms:
         symptom_links = symptom.find_all('a')
@@ -40,6 +49,7 @@ def getDiseasesForSymptomsLink(symptoms, diseases_with_symptoms):
                 symptom_page = requests.get(symptomLink['href'])
                 symptom_soup = BeautifulSoup(symptom_page.content, 'html.parser')
                 diseases_for_symptom = getDiseasesForSymptom(symptom_soup)
+                # Si existen enfermedades
                 if diseases_for_symptom:
                     diseases = getDiseases(diseases_for_symptom)
                     for disease in diseases:
@@ -49,6 +59,9 @@ def getDiseasesForSymptomsLink(symptoms, diseases_with_symptoms):
                         else:
                             diseases_with_symptoms[disease] = [symptom]
 
+'''
+Método que se encarga de recoger la información de los síntomas. 
+'''
 def getData(link):
     diseases_with_symptoms = {}
     realLink = link.find('a')['href']
@@ -59,9 +72,14 @@ def getData(link):
     getDiseasesForSymptomsLink(symptoms, diseases_with_symptoms)
     return diseases_with_symptoms
 
+
 def multiprocessing_func(x, diseases_list):
     diseases_list.append(getData(x))
 
+'''
+Función principal del programa que crea los hilos que recogeran los datos de la página
+de Medicinet. 
+'''
 if __name__ == '__main__':
     paper_link_aux = 'https://www.medicinenet.com/symptoms_and_signs/alpha_a.htm'
     page = requests.get(paper_link_aux)
@@ -71,17 +89,21 @@ if __name__ == '__main__':
     processes = []
     manager = multiprocessing.Manager()
     results_list = manager.list()
-
+    # Para cada síntoma se lanza un hilo
     for link in total_symptoms_link:
-        print(f"Ahora empieza en link {link}")
         p = multiprocessing.Process(target=multiprocessing_func, args=(link, results_list))
         processes.append(p)
         p.start()
 
+    # Se espera a que acaben los hilos
     for proc in processes:
         proc.join()
-        print("Ahora ha acabado 1 link")
 
     d1 = {k: v for e in results_list for (k, v) in e.items()}
 
-    print(f"Este es el diccionario resultante: \n\n {d1}")
+    # Se guardan los resultados en un fichero de texto
+    f = open("diseases.txt", "w")
+    f.write(str(d1))
+    f.close()
+
+    print("Fichero creado!")
